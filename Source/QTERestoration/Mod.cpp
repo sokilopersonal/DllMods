@@ -3,8 +3,11 @@
 #include "Configuration.h"
 #include "QTEJumpBoard.h"
 #include "QTEReactionPlate.h"
-#include "QTEReactionPlate.h"
+#include "ReactionPlateScoreSupport.h"
 #include "TrickJumper.h"
+#include "ModeChanger.h"
+#include "ModLoader.h"
+#include "MsgChangeModeToForward.h"
 
 extern "C" __declspec(dllexport) void Init(ModInfo * modInfo)
 {
@@ -19,12 +22,10 @@ extern "C" __declspec(dllexport) void Init(ModInfo * modInfo)
 	// Load extra animations
 	AnimationSetPatcher::applyPatches();
 
-	// Hack AdlibTrickJump to be QTE
-	if (Configuration::m_hackAdlibTrickJump)
-	{
-		QTEJumpBoard::applyPatches();
-		QTEReactionPlate::applyPatches();
-	}
+	QTEJumpBoard::applyPatches();
+	QTEReactionPlate::applyPatches();
+	ReactionPlateScoreSupport::applyPatches();
+	//ReactionPlate2DFix::applyPatches();
 
 	// QTE Custom Object
 	TrickJumper::registerObject();
@@ -38,5 +39,5 @@ extern "C" __declspec(dllexport) void PostInit()
 
 extern "C" void __declspec(dllexport) OnFrame()
 {
-
+	
 }

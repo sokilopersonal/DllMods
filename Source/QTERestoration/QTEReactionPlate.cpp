@@ -27,8 +27,8 @@ void fE5CD90
     }
 }
 
-int m_qteReactionPlateBaseScore = 0;
-int m_qteReactionPlateAddScore = 0;
+//int m_qteReactionPlateBaseScore = 0;
+//int m_qteReactionPlateAddScore = 0;
 SharedPtrTypeless reactionPlatePfxHandle;
 void ProcMsgHitReactionPlate(Sonic::Player::CPlayerSpeed* This, const Sonic::Message::MsgHitReactionPlate& message)
 {
@@ -70,7 +70,7 @@ void ProcMsgHitReactionPlate(Sonic::Player::CPlayerSpeed* This, const Sonic::Mes
             This->GetContext()->m_spMatrixNode->m_Transform.SetRotationAndPosition(rotation * This->GetContext()->m_HorizontalRotation, message.m_Position + message.m_Direction * 0.25f);
             This->GetContext()->m_spMatrixNode->NotifyChanged();
 
-            m_qteReactionPlateBaseScore = max(0, message.m_Score);
+            //m_qteReactionPlateBaseScore = max(0, message.m_Score);
         }
     }
     else if (This->m_StateMachine.GetCurrentState()->GetStateName() != "ReactionLand")
@@ -89,59 +89,59 @@ void ProcMsgHitReactionPlate(Sonic::Player::CPlayerSpeed* This, const Sonic::Mes
     }
 }
 
-HOOK(bool, __fastcall, QTEReactionPlate_CPlayerSpeedProcessMessage, 0xE6E000, hh::fnd::CMessageActor* This, void* Edx, hh::fnd::Message& message, bool flag)
-{
-    if (flag && message.Is<Sonic::Message::MsgHitReactionPlate>())
-    {
-        ProcMsgHitReactionPlate(static_cast<Sonic::Player::CPlayerSpeed*>(This),
-            static_cast<Sonic::Message::MsgHitReactionPlate&>(message));
-        return true;
-    }
-
-    return originalQTEReactionPlate_CPlayerSpeedProcessMessage(This, Edx, message, flag);
-}
-
-HOOK(bool, __stdcall, QTEReactionPlate_PlayUIEffect, 0xE6F3E0, float* This, void* a2)
-{
-    bool result = originalQTEReactionPlate_PlayUIEffect(This, a2);
-    if (result)
-    {
-        float inputTime = This[12];
-        float maxTime = This[9];
-        m_qteReactionPlateAddScore = max(0, (int)((maxTime - 0.5f) * 500.f * (maxTime - inputTime) / maxTime));
-    }
-
-    return result;
-}
-
-HOOK(int, __fastcall, QTEReactionPlate_CPlayerSpeedStateReactionLandEnd, 0x124B7D0, hh::fnd::CStateMachineBase::CStateBase* This)
-{
-    uint32_t context = (uint32_t)This->GetContextBase();
-    uint32_t v3 = *(uint32_t*)(context + 2036);
-    bool success = *(bool*)(v3 + 57);
-
-    int score = m_qteReactionPlateBaseScore + m_qteReactionPlateAddScore;
-    if (score > 0 && success)
-    {
-        ScoreGenerationsAPI::AddScore(score);
-        UnleashedHUD_API::AddTrickScore(score);
-    }
-    m_qteReactionPlateBaseScore = 0;
-    m_qteReactionPlateAddScore = 0;
-
-    return originalQTEReactionPlate_CPlayerSpeedStateReactionLandEnd(This);
-}
-
-HOOK(void, __fastcall, QTEReactionPlate_MsgHitEventCollision, 0x1017020, uint32_t* This, void* Edx, void* message)
-{
-    auto* player = Sonic::Player::CPlayerSpeedContext::GetInstance()->m_pPlayer;
-    uint32_t type = This[75];
-    if (type > 0 && type < 5 && player->m_StateMachine.GetCurrentState()->GetStateName() == "ReactionJump")
-    {
-        Common::ObjectCGlitterPlayerOneShot(This, "ef_cmn_reaction");
-    }
-    originalQTEReactionPlate_MsgHitEventCollision(This, Edx, message);
-}
+//HOOK(bool, __fastcall, QTEReactionPlate_CPlayerSpeedProcessMessage, 0xE6E000, hh::fnd::CMessageActor* This, void* Edx, hh::fnd::Message& message, bool flag)
+//{
+//    if (flag && message.Is<Sonic::Message::MsgHitReactionPlate>())
+//    {
+//        ProcMsgHitReactionPlate(static_cast<Sonic::Player::CPlayerSpeed*>(This),
+//            static_cast<Sonic::Message::MsgHitReactionPlate&>(message));
+//        return true;
+//    }
+//
+//    return originalQTEReactionPlate_CPlayerSpeedProcessMessage(This, Edx, message, flag);
+//}
+//
+//HOOK(bool, __stdcall, QTEReactionPlate_PlayUIEffect, 0xE6F3E0, float* This, void* a2)
+//{
+//    bool result = originalQTEReactionPlate_PlayUIEffect(This, a2);
+//    if (result)
+//    {
+//        float inputTime = This[12];
+//        float maxTime = This[9];
+//        //m_qteReactionPlateAddScore = max(0, (int)((maxTime - 0.5f) * 500.f * (maxTime - inputTime) / maxTime));
+//    }
+//
+//    return result;
+//}
+//
+//HOOK(int, __fastcall, QTEReactionPlate_CPlayerSpeedStateReactionLandEnd, 0x124B7D0, hh::fnd::CStateMachineBase::CStateBase* This)
+//{
+//    uint32_t context = (uint32_t)This->GetContextBase();
+//    uint32_t v3 = *(uint32_t*)(context + 2036);
+//    bool success = *(bool*)(v3 + 57);
+//
+//    /*int score = m_qteReactionPlateBaseScore + m_qteReactionPlateAddScore;
+//    if (score > 0 && success)
+//    {
+//        ScoreGenerationsAPI::AddScore(score);
+//        UnleashedHUD_API::AddTrickScore(score);
+//    }
+//    m_qteReactionPlateBaseScore = 0;
+//    m_qteReactionPlateAddScore = 0;*/
+//
+//    return originalQTEReactionPlate_CPlayerSpeedStateReactionLandEnd(This);
+//}
+//
+//HOOK(void, __fastcall, QTEReactionPlate_MsgHitEventCollision, 0x1017020, uint32_t* This, void* Edx, void* message)
+//{
+//    auto* player = Sonic::Player::CPlayerSpeedContext::GetInstance()->m_pPlayer;
+//    uint32_t type = This[75];
+//    if (type > 0 && type < 5 && player->m_StateMachine.GetCurrentState()->GetStateName() == "ReactionJump")
+//    {
+//        Common::ObjectCGlitterPlayerOneShot(This, "ef_cmn_reaction");
+//    }
+//    originalQTEReactionPlate_MsgHitEventCollision(This, Edx, message);
+//}
 
 void QTEReactionPlate_ReactionJumpPlaySfx()
 {
@@ -195,10 +195,10 @@ void QTEReactionPlate::applyPatches()
         "sea_obj_km_reactionpanelQ_000");
 
     // main hooks
-    INSTALL_HOOK(QTEReactionPlate_CPlayerSpeedProcessMessage);
-    INSTALL_HOOK(QTEReactionPlate_PlayUIEffect);
-    INSTALL_HOOK(QTEReactionPlate_CPlayerSpeedStateReactionLandEnd);
-    INSTALL_HOOK(QTEReactionPlate_MsgHitEventCollision);
+    //INSTALL_HOOK(QTEReactionPlate_CPlayerSpeedProcessMessage);
+    //INSTALL_HOOK(QTEReactionPlate_PlayUIEffect);
+    //INSTALL_HOOK(QTEReactionPlate_CPlayerSpeedStateReactionLandEnd);
+    //INSTALL_HOOK(QTEReactionPlate_MsgHitEventCollision);
     WRITE_JUMP(0xE5D03E, QTEReactionPlate_ReactionJumpPlaySfxTrampoline);
     WRITE_JUMP(0xE5CDB3, QTEReactionPlate_ReactionJumpPlaySfxTrampoline);
     WRITE_JUMP(0x124B915, QTEReactionPlate_ReactionJumpSetAnimTrampoline);
@@ -208,7 +208,7 @@ void QTEReactionPlate::applyPatches()
     WRITE_MEMORY(0x1274C6A + 6, char*, "sn_wall_fly00_loop");
 
     // use custom xncp
-    WRITE_STRING(0x1604AEC, "ui_qte_swa");
+    WRITE_STRING(0x1604AEC, "ui_qte");
 
     // use stumble voice instead of damage02
     WRITE_MEMORY(0xE5CBF9, uint32_t, 3002002);

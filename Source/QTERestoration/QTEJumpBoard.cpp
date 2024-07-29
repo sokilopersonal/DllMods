@@ -7,12 +7,12 @@ float const c_qteButtonXSpacing = 115.0f;
 float const c_qteButtonYSpacing = 75.0f;
 float const c_qteButtonSpamXPos = 584.0f;
 float const c_qteButtonYPos = 360.0f;
-float const c_qteSlowTimeScale = 0.075f;
+float const c_qteSlowTimeScale = 0.065f;
 float const c_qteSlowTimeTime = 0.6f;
 float const c_qteSlowTimeFixed = 0.17f;
 float const c_qteAppearTime = 0.8f;
 float const c_qteSimRate = 1.0f / 60.0f;
-float const c_qteBaseScore = 3000.0f;
+float const c_qteBaseScore = 5000.0f;
 float const c_qteDifficultyTimes[] =
 {
     5.0f,
@@ -39,6 +39,42 @@ float const c_qteSpamDifficultyTimes[] =
     5.0f,
     3.5f,
     2.0f,
+};
+
+std::map<const char*, int> const stageSequenceCount =
+{
+	{ "ghz200", 1 },
+	{ "cpz200", 1 },
+	{ "ssz200", 1 },
+	{ "sph200", 1 },
+	{ "cte200", 1 },
+	{ "ssh200", 1 },
+	{ "csc200", 2 },
+	{ "euc200", 3 }
+};
+
+std::map<const char*, int> const stageDifficultyCount =
+{
+	{ "ghz200", 2 },
+	{ "cpz200", 2 },
+	{ "ssz200", 3 },
+	{ "sph200", 3 },
+	{ "cte200", 4 },
+	{ "ssh200", 5 },
+	{ "csc200", 6 },
+	{ "euc200", 7 }
+};
+
+std::map<const char*, int> const stageButtonCount =
+{
+    { "ghz200", 3 },
+    { "cpz200", 3 },
+    { "ssz200", 4 },
+    { "sph200", 4 },
+    { "cte200", 4 },
+    { "ssh200", 4 },
+    { "csc200", 4 },
+    { "euc200", 5 }
 };
 
 class CQTEButtonSequence : public Sonic::CGameObject
@@ -75,6 +111,13 @@ class CQTEButtonSequence : public Sonic::CGameObject
 
         Chao::CSD::RCPtr<Chao::CSD::CScene> m_bg;
         Chao::CSD::RCPtr<Chao::CSD::CScene> m_timer;
+    };
+
+    struct StageDifficulty 
+    {
+        size_t m_sequenceCount;
+        size_t m_difficulty;
+        size_t m_buttonCount;
     };
 
     Chao::CSD::RCPtr<Chao::CSD::CScene> m_txt1; // nice
@@ -138,12 +181,7 @@ public:
         m_rcQTE = nullptr;
     }
 
-    void AddCallback
-    (
-        const Hedgehog::Base::THolder<Sonic::CWorld>& worldHolder,
-        Sonic::CGameDocument* pGameDocument,
-        const boost::shared_ptr<Hedgehog::Database::CDatabase>& spDatabase
-    ) override
+    void AddCallback(const Hedgehog::Base::THolder<Sonic::CWorld>& worldHolder, Sonic::CGameDocument* pGameDocument, const boost::shared_ptr<Hedgehog::Database::CDatabase>&) override
     {
         // Update unit 1 is unaffected by time slowing down
         Sonic::CApplicationDocument::GetInstance()->AddMessageActor("GameObject", this);
@@ -193,20 +231,8 @@ public:
             }
         }
 
-        // we have invalid number, probably Gen's trick panel
-        if (m_sequences.empty())
-        {
-            // create a completely random sequence
-            size_t sequenceCount = 1;// (rand() % 3) + 1;
-            while (m_sequences.size() < sequenceCount)
-            {
-                size_t difficulty = rand() % 5; // [0-4] difficulty, don't want to make it too hard
-                size_t buttonCount = (rand() % 3) + 3; // [3-5] buttons
-                CreateSequence(difficulty, buttonCount);
-            }
-        }
+        GenerateDifficulty();
 
-#if _DEBUG
         for (uint32_t s = 0; s < m_sequences.size(); s++)
         {
             Sequence const& sequence = m_sequences[s];
@@ -220,11 +246,21 @@ public:
 
             printf("[QTE] Sequence %u: %.2fs [%s]\n", s, sequence.m_time, str.c_str());
         }
-#endif
 
+        CreateUI();
+
+        m_spQTE = boost::make_shared<Sonic::CGameObjectCSD>(m_rcQTE, 0.5f, "HUD_B2", false);
+        Sonic::CGameDocument::GetInstance()->AddGameObject(m_spQTE, "main", this);
+
+        auto* context = Sonic::Player::CPlayerSpeedContext::GetInstance();
+        context->StateFlag(eStateFlag_OutOfControl)++;
+    }
+
+    void CreateUI()
+    {
         // initialize ui
         Sonic::CCsdDatabaseWrapper wrapper(m_pMember->m_pGameDocument->m_pMember->m_spDatabase.get());
-        auto spCsdProject = wrapper.GetCsdProject("ui_qte_swa");
+        auto spCsdProject = wrapper.GetCsdProject("ui_qte"); // ui_qte_swa doesn't work, so I just removed "_swa" and now it works!!
         m_rcQTE = spCsdProject->m_rcProject;
 
         m_txt1 = m_rcQTE->CreateScene("qte_txt_1");
@@ -243,12 +279,11 @@ public:
             sequence.m_timer = m_rcQTE->CreateScene("m_timer");
             sequence.m_timer->SetHideFlag(true);
 
-            // spam mode
             sequence.m_boss = m_rcQTE->CreateScene("m_boss");
             SetSpamAmountText(sequence.m_boss, sequence.m_spamCount);
             sequence.m_boss->SetHideFlag(true);
 
-            // utterly useless code to handle more than 10 buttons with multiple rows
+            // code to show any number of buttons
             size_t rowCount = ((sequence.m_buttons.size() - 1) / 10) + 1;
             std::vector<size_t> columnCounts(rowCount, sequence.m_buttons.size() / rowCount);
             for (size_t i = 0; i < sequence.m_buttons.size() % rowCount; i++)
@@ -304,6 +339,7 @@ public:
                     button.m_scene->GetNode("bg")->SetPosition(2.35f, 0.0f);
                     break;
                 }
+
                 button.m_scene->SetHideFlag(true);
                 button.m_scene->GetNode("position")->SetPosition(xPos, yPos);
                 button.m_effect = m_rcQTE->CreateScene("qte_multi_effect");
@@ -314,23 +350,48 @@ public:
                 column++;
                 if (column >= columnCounts[row] && row < rowCount - 1)
                 {
-                    // next row
                     row++;
                     column = 0;
                     yPos += c_qteButtonYSpacing;
                 }
             }
         }
+    }
 
-        m_spQTE = boost::make_shared<Sonic::CGameObjectCSD>(m_rcQTE, 0.5f, "HUD_B2", false);
-        Sonic::CGameDocument::GetInstance()->AddGameObject(m_spQTE, "main", this);
+    void GenerateDifficulty()
+    {
+        // we have invalid number, probably Gen's trick panel
+        if (m_sequences.empty())
+        {
+            // create a completely random sequence (finally)
+            const char* const STAGE_ID = (const char*)0x1E774D4;
+            StageDifficulty difficulty;
+            
+            /*if (std::string(STAGE_ID) == "euc200")
+            {
+                difficulty.m_sequenceCount = 3;
+                difficulty.m_buttonCount = 5;
+                difficulty.m_difficulty = 6;
+            }
+            else 
+            {
+                difficulty.m_sequenceCount = 1;
+                difficulty.m_buttonCount = (rand() % 3) + 3;
+                difficulty.m_difficulty = rand() % 5;
+            }*/
 
-        // make sure Sonic doesn't receive input
-        auto* context = Sonic::Player::CPlayerSpeedContext::GetInstance();
-        context->StateFlag(eStateFlag_OutOfControl)++;
+            difficulty.m_sequenceCount = 1;
+            difficulty.m_buttonCount = (rand() % 3) + 3;
+            difficulty.m_difficulty = rand() % 5;
 
-        // change animation
-        Common::SonicContextChangeAnimation("JumpSpring");
+            //size_t sequenceCount = 1; // (rand() % 2) + 1
+            while (m_sequences.size() < difficulty.m_sequenceCount)
+            {
+                //size_t difficulty = rand() % 5; // [0-4] difficulty, don't want to make it too hard
+                //size_t buttonCount = (rand() % 3) + 3; // [3-5] buttons
+                CreateSequence(difficulty.m_difficulty, difficulty.m_buttonCount);
+            }
+        }
     }
 
     void CreateSequence(size_t difficulty, uint32_t buttonCount)
@@ -359,16 +420,12 @@ public:
         m_sequences.push_front(sequence);
     }
 
-    bool ProcessMessage
-    (
-        Hedgehog::Universe::Message& message,
-        bool flag
-    ) override
+    bool ProcessMessage(Hedgehog::Universe::Message& message, bool flag) override
     {
         if (flag)
         {
             if (std::strstr(message.GetType(), "MsgRestartStage") != nullptr
-             || std::strstr(message.GetType(), "MsgStageClear") != nullptr)
+                || std::strstr(message.GetType(), "MsgStageClear") != nullptr)
             {
                 Kill();
                 return true;
@@ -378,10 +435,7 @@ public:
         return Sonic::CGameObject::ProcessMessage(message, flag);
     }
 
-    void UpdateParallel
-    (
-        const Hedgehog::Universe::SUpdateInfo& updateInfo
-    ) override
+    void UpdateParallel(const Hedgehog::Universe::SUpdateInfo& updateInfo) override
     {
         m_lifeTime += updateInfo.DeltaTime;
         static SharedPtrTypeless soundHandle;
@@ -389,138 +443,140 @@ public:
 
         switch (m_state)
         {
-        case S_SlowTime:
-        {
-            // before buttons show up, use this time to calculate where Sonic will land
-            // if QTE is successful, optimized by doing simulation over a period of time
-            auto* context = Sonic::Player::CPlayerSpeedContext::GetInstance();
-            float gravity = -context->m_spParameter->Get<float>(Sonic::Player::ePlayerSpeedParameter_Gravity);
-            uint32_t simsThisFrame = 0;
-            while (simsThisFrame < m_simsPerFrame && m_data.m_outOfControl > 0.0f)
+            case S_SlowTime:
             {
-                Hedgehog::Math::CVector const velPrev = m_data.m_velocity;
-                m_data.m_velocity += Hedgehog::Math::CVector::UnitY() * gravity * c_qteSimRate;
-                Hedgehog::Math::CVector const posPrev = m_data.m_position;
-                m_data.m_position += (velPrev + m_data.m_velocity) * 0.5f * c_qteSimRate;
+                Common::SonicContextChangeAnimation("TrickPrepare");
 
-                simsThisFrame++;
-                m_data.m_outOfControl -= c_qteSimRate;
-            }
-
-            if (SlowTime() &&m_lifeTime >= c_qteAppearTime)
-            {
-                //printf("[QTE] Boost Land Location = {%.2f, %.2f, %.2f}\n", DEBUG_VECTOR3(m_data.m_position));
-                PlayIntroAnim();
-                m_state = S_Intro;
-            }
-            break;
-        }
-        case S_Intro:
-        {
-            Sequence const& sequence = m_sequences[m_sequenceID];
-            if (sequence.m_bg->m_MotionDisableFlag)
-            {
-                PlayMotion(sequence.m_timer, "Timer_Anim", 100.0f / (60.0f * sequence.m_time));
-                m_state = S_Input;
-            }
-            break;
-        }
-        case S_Input:
-        {
-            Sequence& sequence = m_sequences[m_sequenceID];
-
-            // check for any tapped buttons
-            std::vector<Sonic::EKeyState> const buttons = 
-            {
-                Sonic::eKeyState_A,
-                Sonic::eKeyState_B,
-                Sonic::eKeyState_X,
-                Sonic::eKeyState_Y,
-                Sonic::eKeyState_LeftBumper,
-                Sonic::eKeyState_RightBumper,
-            };
-            Sonic::EKeyState tapped = Sonic::eKeyState_None;
-            for (Sonic::EKeyState const& button : buttons)
-            {
-                if (Common::fIsButtonTapped(button))
+                // before buttons show up, use this time to calculate where Sonic will land
+                // if QTE is successful, optimized by doing simulation over a period of time
+                auto* context = Sonic::Player::CSonicContext::GetInstance();
+                float gravity = -context->m_spParameter->Get<float>(Sonic::Player::ePlayerSpeedParameter_Gravity);
+                uint32_t simsThisFrame = 0;
+                while (simsThisFrame < m_simsPerFrame && m_data.m_outOfControl > 0.0f)
                 {
-                    tapped = button;
-                    break;
-                }
-            }
+                    Hedgehog::Math::CVector const velPrev = m_data.m_velocity;
+                    m_data.m_velocity += Hedgehog::Math::CVector::UnitY() * gravity * c_qteSimRate;
+                    Hedgehog::Math::CVector const posPrev = m_data.m_position;
+                    m_data.m_position += (velPrev + m_data.m_velocity) * 0.5f * c_qteSimRate;
 
-            bool failed = false;
-            if (tapped != Sonic::eKeyState_None)
-            {
-                Button const& button = sequence.m_buttons[m_buttonID];
-                switch (button.m_type)
-                {
-                case ButtonType::A: failed = (tapped != Sonic::eKeyState_A); break;
-                case ButtonType::B: failed = (tapped != Sonic::eKeyState_B); break;
-                case ButtonType::X: failed = (tapped != Sonic::eKeyState_X); break;
-                case ButtonType::Y: failed = (tapped != Sonic::eKeyState_Y); break;
-                case ButtonType::LB: failed = (tapped != Sonic::eKeyState_LeftBumper); break;
-                case ButtonType::RB: failed = (tapped != Sonic::eKeyState_RightBumper); break;
+                    simsThisFrame++;
+                    m_data.m_outOfControl -= c_qteSimRate;
                 }
 
-                if (!failed)
+                if (SlowTime() && m_lifeTime >= c_qteAppearTime)
                 {
-                    if (sequence.m_spamCount > 1)
+                    printf("[QTE] Boost Land Location = {%.2f, %.2f, %.2f}\n", DEBUG_VECTOR3(m_data.m_position));
+                    PlayIntroAnim();
+                    m_state = S_Intro;
+                }
+                break;
+            }
+            case S_Intro:
+            {
+                Sequence const& sequence = m_sequences[m_sequenceID];
+                if (sequence.m_bg->m_MotionDisableFlag)
+                {
+                    PlayMotion(sequence.m_timer, "Timer_Anim", 100.0f / (60.0f * sequence.m_time));
+                    m_state = S_Input;
+                }
+                break;
+            }
+            case S_Input:
+            {
+                Sequence& sequence = m_sequences[m_sequenceID];
+
+                // check for any tapped buttons
+                std::vector<Sonic::EKeyState> const buttons =
+                {
+                    Sonic::eKeyState_A,
+                    Sonic::eKeyState_B,
+                    Sonic::eKeyState_X,
+                    Sonic::eKeyState_Y,
+                    Sonic::eKeyState_LeftBumper,
+                    Sonic::eKeyState_RightBumper,
+                };
+                Sonic::EKeyState tapped = Sonic::eKeyState_None;
+                for (Sonic::EKeyState const& button : buttons)
+                {
+                    if (Common::fIsButtonTapped(button))
                     {
-                        sequence.m_spamCount--;
-                        SetSpamAmountText(sequence.m_boss, sequence.m_spamCount);
+                        tapped = button;
                         break;
                     }
+                }
 
-                    // correct input
-                    PlayMotion(button.m_scene, "Effect_Anim");
-                    PlayMotion(button.m_effect, "Effect_Anim");
-                    m_buttonID++;
-
-                    // next sequence
-                    if (m_buttonID >= sequence.m_buttons.size())
+                bool failed = false;
+                if (tapped != Sonic::eKeyState_None)
+                {
+                    Button const& button = sequence.m_buttons[m_buttonID];
+                    switch (button.m_type)
                     {
-                        Common::SonicContextPlaySound(soundHandle, 3000812995, 0);
+                        case ButtonType::A: failed = (tapped != Sonic::eKeyState_A); break;
+                        case ButtonType::B: failed = (tapped != Sonic::eKeyState_B); break;
+                        case ButtonType::X: failed = (tapped != Sonic::eKeyState_X); break;
+                        case ButtonType::Y: failed = (tapped != Sonic::eKeyState_Y); break;
+                        case ButtonType::LB: failed = (tapped != Sonic::eKeyState_LeftBumper); break;
+                        case ButtonType::RB: failed = (tapped != Sonic::eKeyState_RightBumper); break;
+                    }
 
-                        sequence.m_bg->SetHideFlag(true);
-                        sequence.m_timer->SetHideFlag(true);
-                        sequence.m_boss->SetHideFlag(true);
-
-                        float additionalScore = 1000.0f * sequence.m_time * (1.0f - sequence.m_timer->m_MotionFrame * 0.01f);
-                        int score = max(0, c_qteBaseScore + (int)additionalScore);
-                        ScoreGenerationsAPI::AddScore(score);
-                        UnleashedHUD_API::AddTrickScore(score);
-
-                        m_sequenceID++;
-                        if (m_sequenceID >= m_sequences.size())
+                    if (!failed)
+                    {
+                        if (sequence.m_spamCount > 1)
                         {
-                            // we are done!
-                            if (sequence.m_timer->m_MotionFrame <= 50)
+                            sequence.m_spamCount--;
+                            SetSpamAmountText(sequence.m_boss, sequence.m_spamCount);
+                            break;
+                        }
+
+                        // correct input
+                        PlayMotion(button.m_scene, "Effect_Anim");
+                        PlayMotion(button.m_effect, "Effect_Anim");
+                        m_buttonID++;
+
+                        // next sequence
+                        if (m_buttonID >= sequence.m_buttons.size())
+                        {
+                            Common::SonicContextPlaySound(soundHandle, 3000812995, 0);
+
+                            sequence.m_bg->SetHideFlag(true);
+                            sequence.m_timer->SetHideFlag(true);
+                            sequence.m_boss->SetHideFlag(true);
+
+                            float additionalScore = 1000.0f * sequence.m_time * (1.0f - sequence.m_timer->m_MotionFrame * 0.01f);
+                            int score = max(0, c_qteBaseScore + (int)additionalScore);
+                            ScoreGenerationsAPI::AddScore(score);
+                            UnleashedHUD_API::AddTrickScore(score);
+
+                            m_sequenceID++;
+                            if (m_sequenceID >= m_sequences.size())
                             {
-                                m_txtID = 2;
-                                PlayMotion(m_txt3, "Intro_Anim");
-                            }
-                            else if (sequence.m_timer->m_MotionFrame <= 75)
-                            {
-                                m_txtID = 1;
-                                PlayMotion(m_txt2, "Intro_Anim");
-                            }
-                            else
-                            {
-                                m_txtID = 0;
-                                PlayMotion(m_txt1, "Intro_Anim");
-                            }
-                            
-                            // Don't bother apply impulse if the speed is the same
-                            auto* context = Sonic::Player::CPlayerSpeedContext::GetInstance();
-                            if (m_data.m_impulseSpeedOnBoost != m_data.m_impulseSpeedOnNormal)
-                            {
-                                float outOfControl = 0.0f;
-                                Eigen::Vector3f impulse;
-                                float launchSpeed = m_data.m_impulseSpeedOnNormal;
-                                for (int i = 0; i < 10; i++)
+                                // we are done!
+                                if (sequence.m_timer->m_MotionFrame <= 50)
                                 {
-                                    if (Common::SolveBallisticArc
+                                    m_txtID = 2;
+                                    PlayMotion(m_txt3, "Intro_Anim");
+                                }
+                                else if (sequence.m_timer->m_MotionFrame <= 75)
+                                {
+                                    m_txtID = 1;
+                                    PlayMotion(m_txt2, "Intro_Anim");
+                                }
+                                else
+                                {
+                                    m_txtID = 0;
+                                    PlayMotion(m_txt1, "Intro_Anim");
+                                }
+
+                                // Don't bother apply impulse if the speed is the same
+                                auto* context = Sonic::Player::CPlayerSpeedContext::GetInstance();
+                                if (m_data.m_impulseSpeedOnBoost != m_data.m_impulseSpeedOnNormal)
+                                {
+                                    float outOfControl = 0.0f;
+                                    Eigen::Vector3f impulse;
+                                    float launchSpeed = m_data.m_impulseSpeedOnNormal;
+                                    for (int i = 0; i < 10; i++)
+                                    {
+                                        if (Common::SolveBallisticArc
                                         (
                                             context->m_spMatrixNode->m_Transform.m_Position,
                                             m_data.m_position,
@@ -530,162 +586,150 @@ public:
                                             impulse,
                                             outOfControl
                                         )
-                                    )
-                                    {
-                                        // this makes a 0.5s not to accept MsgApplyImpulse if launched in air...? sub_E2BA00
-                                        context->StateFlag(eStateFlag_NoLandOutOfControl) = 0;
+                                            )
+                                        {
+                                            context->StateFlag(eStateFlag_NoLandOutOfControl) = 0;
 
-                                        //printf("[QTE] Launch velocity = {%.2f, %.2f, %.2f}, Speed = %.2f, OutOfControl = %.2fs\n", DEBUG_VECTOR3(impulse), launchSpeed, outOfControl);
-                                        alignas(16) MsgApplyImpulse message {};
-                                        message.m_position = context->m_spMatrixNode->m_Transform.m_Position;
-                                        message.m_impulse = impulse;
-                                        message.m_impulseType = ImpulseType::JumpBoard;
-                                        message.m_outOfControl = outOfControl;
-                                        message.m_notRelative = true;
-                                        message.m_snapPosition = false;
-                                        message.m_pathInterpolate = false;
-                                        message.m_alwaysMinusOne = -1.0f;
-                                        Common::ApplyPlayerApplyImpulse(message);
+                                            //printf("[QTE] Launch velocity = {%.2f, %.2f, %.2f}, Speed = %.2f, OutOfControl = %.2fs\n", DEBUG_VECTOR3(impulse), launchSpeed, outOfControl);
+                                            alignas(16) MsgApplyImpulse message {};
+                                            message.m_position = context->m_spMatrixNode->m_Transform.m_Position;
+                                            message.m_impulse = impulse;
+                                            message.m_impulseType = ImpulseType::JumpBoard;
+                                            message.m_outOfControl = outOfControl;
+                                            message.m_notRelative = true;
+                                            message.m_snapPosition = false;
+                                            message.m_pathInterpolate = false;
+                                            message.m_alwaysMinusOne = -1.0f;
+                                            Common::ApplyPlayerApplyImpulse(message);
+                                            break;
+                                        }
+                                        else
+                                        {
+                                            //printf("[QTE] No solution for launch speed %.2f\n", launchSpeed);
+                                            launchSpeed += 10.0f;
+                                        }
+                                    }
+                                }
+
+                                const char* volatile const* trickAnim = AnimationSetPatcher::TrickSG;
+                                int const randomIndex = rand() % 7;
+                                Common::SonicContextChangeAnimation("Trick_FinishB");
+                                Common::SonicContextPlayVoice(voiceHandle, 3002013, 20);
+
+                                if (randomIndex != 1)
+                                {
+                                    static SharedPtrTypeless pfxHandle;
+                                    std::string effectName = "ef_cmn_trickjump_C";
+                                    std::string boneName = "Tail";
+                                    switch (randomIndex)
+                                    {
+                                    case 0:
+                                        effectName = "ef_cmn_trickjump_A";
                                         break;
+                                    case 2:
+                                        effectName = "ef_cmn_trickjump_C";
+                                        break;
+                                    case 3:
+                                        effectName = "ef_cmn_trickjump_D";
+                                        break;
+                                    case 4:
+                                        effectName = "ef_cmn_trickjump_E";
+                                        boneName = "Index3_R";
+                                        break;
+                                    case 5:
+                                        effectName = "ef_cmn_trickjump_F";
+                                        boneName = "Index3_L";
+                                        break;
+                                    case 6:
+                                        effectName = "ef_cmn_trickjump_G";
+                                        break;
+                                    }
+
+                                    auto attachBone = context->m_pPlayer->m_spCharacterModel->GetNode(boneName.c_str());
+                                    if (attachBone != nullptr)
+                                    {
+                                        // play on specific bone
+                                        Common::fCGlitterCreate(*PLAYER_CONTEXT, pfxHandle, &attachBone, effectName.c_str(), 1);
                                     }
                                     else
                                     {
-                                        //printf("[QTE] No solution for launch speed %.2f\n", launchSpeed);
-                                        launchSpeed += 10.0f;
+                                        // default Sonic's middle pos
+                                        void* matrixNode = (void*)((uint32_t)*PLAYER_CONTEXT + 0x30);
+                                        Common::fCGlitterCreate(*PLAYER_CONTEXT, pfxHandle, matrixNode, effectName.c_str(), 1);
                                     }
                                 }
+
+                                m_state = S_Outro;
+                                break;
                             }
 
-                            const char* volatile const* trickAnim = AnimationSetPatcher::TrickSG;
-                            bool const isUnleashedSonic = context->m_pPlayer->m_spCharacterModel->GetNode("SonicRoot") != nullptr;
-                            if (isUnleashedSonic)
-                            {
-                                // Unleashed Sonic
-                                trickAnim = AnimationSetPatcher::TrickSWA;
-                            }
-                            else if (context->m_pPlayer->m_spCharacterModel->GetNode("EvilRoot") != nullptr)
-                            {
-                                // Werehog
-                            }
-
-                            int const randomIndex = rand() % 7;
-                            Common::SonicContextChangeAnimation(trickAnim[randomIndex]);
-                            Common::SonicContextPlayVoice(voiceHandle, 3002013, 20);
-
-                            // play pfx, trick_B plays nothing
-                            if (randomIndex != 1)
-                            {
-                                static SharedPtrTypeless pfxHandle;
-                                std::string effectName = "ef_cmn_trickjump_C";
-                                std::string boneName = isUnleashedSonic ? "Tail1" : "Tail";
-                                switch (randomIndex)
-                                {
-                                case 0:
-                                    effectName = "ef_cmn_trickjump_A";
-                                    break;
-                                case 2:
-                                    effectName = "ef_cmn_trickjump_C";
-                                    break;
-                                case 3:
-                                    effectName = "ef_cmn_trickjump_D";
-                                    break;
-                                case 4:
-                                    effectName = "ef_cmn_trickjump_E";
-                                    boneName = "Index3_R";
-                                    break;
-                                case 5:
-                                    effectName = "ef_cmn_trickjump_F";
-                                    boneName = "Index3_L";
-                                    break;
-                                case 6:
-                                    effectName = "ef_cmn_trickjump_G";
-                                    break;
-                                }
-
-                                auto attachBone = context->m_pPlayer->m_spCharacterModel->GetNode(boneName.c_str());
-                                if (attachBone != nullptr)
-                                {
-                                    // play on specific bone
-                                    Common::fCGlitterCreate(*PLAYER_CONTEXT, pfxHandle, &attachBone, effectName.c_str(), 1);
-                                }
-                                else
-                                {
-                                    // default Sonic's middle pos
-                                    void* matrixNode = (void*)((uint32_t)*PLAYER_CONTEXT + 0x30);
-                                    Common::fCGlitterCreate(*PLAYER_CONTEXT, pfxHandle, matrixNode, effectName.c_str(), 1);
-                                }
-                            }
-
-                            m_state = S_Outro;
-                            break;
+                            m_buttonID = 0;
+                            PlayIntroAnim();
+                            m_state = S_Intro;
                         }
+                        else
+                        {
+                            Common::SonicContextPlaySound(soundHandle, 3000812987, 0);
+                        }
+                        break;
+                    }
+                }
 
-                        m_buttonID = 0;
-                        PlayIntroAnim();
-                        m_state = S_Intro;
-                    }
-                    else
+                // you fucked up
+                if (sequence.m_timer->m_MotionDisableFlag || failed)
+                {
+                    for (Button const& button : sequence.m_buttons)
                     {
-                        Common::SonicContextPlaySound(soundHandle, 3000812987, 0);
+                        button.m_scene->SetHideFlag(true);
                     }
+                    sequence.m_bg->SetHideFlag(true);
+                    sequence.m_timer->SetHideFlag(true);
+                    sequence.m_boss->SetHideFlag(true);
+
+                    m_txtID = 3;
+                    PlayMotion(m_txt4, "Intro_Anim");
+
+                    Common::SonicContextChangeAnimation("Fall");
+                    Common::SonicContextPlayVoice(soundHandle, 3002002, 10);
+                    Common::SonicContextPlaySound(soundHandle, 3000812996, 0);
+
+                    m_state = S_Outro;
                     break;
                 }
-            }
 
-            // you fucked up
-            if (sequence.m_timer->m_MotionDisableFlag || failed)
-            {
-                for (Button const& button : sequence.m_buttons)
-                {
-                    button.m_scene->SetHideFlag(true);
-                }
-                sequence.m_bg->SetHideFlag(true);
-                sequence.m_timer->SetHideFlag(true);
-                sequence.m_boss->SetHideFlag(true);
-
-                m_txtID = 3;
-                PlayMotion(m_txt4, "Intro_Anim");
-
-                Common::SonicContextChangeAnimation("Fall");
-                Common::SonicContextPlayVoice(soundHandle, 3002002, 10);
-                Common::SonicContextPlaySound(soundHandle, 3000812996, 0);
-
-                m_state = S_Outro;
                 break;
             }
+            case S_Outro:
+            {
+                auto* context = Sonic::Player::CPlayerSpeedContext::GetInstance();
+                context->StateFlag(eStateFlag_OutOfControl)--;
+                ResetTime();
 
-            break;
-        }
-        case S_Outro:
-        {
-            auto* context = Sonic::Player::CPlayerSpeedContext::GetInstance();
-            context->StateFlag(eStateFlag_OutOfControl)--;
-            ResetTime();
-            
-            m_state = S_Outro2;
-            break;
-        }
-        case S_Outro2:
-        {
-            Chao::CSD::RCPtr<Chao::CSD::CScene> const& txt = GetTxtScene();
-            if (txt->m_MotionDisableFlag)
-            {
-                PlayMotion(txt, m_txtID == 3 ? "Fnish_Anim" : "Finish_Anim");
-                m_state = S_Finished;
+                m_state = S_Outro2;
+                break;
             }
-            break;
-        }
-        case S_Finished:
-        {
-            Chao::CSD::RCPtr<Chao::CSD::CScene> const& txt = GetTxtScene();
-            if (txt->m_MotionDisableFlag)
+            case S_Outro2:
             {
-                Kill();
+                Chao::CSD::RCPtr<Chao::CSD::CScene> const& txt = GetTxtScene();
+                if (txt->m_MotionDisableFlag)
+                {
+                    PlayMotion(txt, m_txtID == 3 ? "Fnish_Anim" : "Finish_Anim");
+                    m_state = S_Finished;
+                }
+                break;
             }
-            break;
-        }
+            case S_Finished:
+            {
+                Chao::CSD::RCPtr<Chao::CSD::CScene> const& txt = GetTxtScene();
+                if (txt->m_MotionDisableFlag)
+                {
+                    Kill();
+                }
+                break;
+            }
         }
     }
+
 
     bool* GetTimeScaleEnabled()
     {
@@ -700,7 +744,7 @@ public:
     bool SlowTime()
     {
         *(bool*)Common::GetMultiLevelAddress(0x1E0BE5C, { 0x8, 0x19C }) = true;
-        
+
         float const timeBeforeSlowDown = c_qteAppearTime - c_qteSlowTimeTime - c_qteSlowTimeFixed;
         float const prop = (m_lifeTime - timeBeforeSlowDown) / c_qteSlowTimeTime;
 
@@ -804,7 +848,6 @@ public:
 
     void Kill()
     {
-        //printf("[QTE] Killed\n");
         SendMessage(m_ActorID, boost::make_shared<Sonic::Message::MsgKill>());
     }
 };
@@ -826,10 +869,10 @@ void QTEJumpBoard_RestoreSizeType(uint32_t const& This)
 HOOK(void, __fastcall, QTEJumpBoard_MsgHitEventCollision, 0x1014FB0, uint32_t This, void* Edx, void* a2)
 {
     QTEJumpBoard_SaveSizeType(This);
-	originalQTEJumpBoard_MsgHitEventCollision(This, Edx, a2);
+    originalQTEJumpBoard_MsgHitEventCollision(This, Edx, a2);
     QTEJumpBoard_RestoreSizeType(This);
 
-	QTEJumpBoard::GetQTEJumpBoardData(This);
+    QTEJumpBoard::GetQTEJumpBoardData(This);
 }
 
 HOOK(void, __fastcall, QTEJumpBoard_MsgApplyImpulse, 0xE6CFA0, void* This, void* Edx, MsgApplyImpulse* message)
@@ -838,11 +881,8 @@ HOOK(void, __fastcall, QTEJumpBoard_MsgApplyImpulse, 0xE6CFA0, void* This, void*
 
     if (QTEJumpBoard::m_data.m_init)
     {
-        // record some data
         QTEJumpBoard::m_data.m_position = message->m_position;
         QTEJumpBoard::m_data.m_velocity = message->m_impulse.normalized() * QTEJumpBoard::m_data.m_impulseSpeedOnBoost;
-
-        // create QTE object
         auto object = boost::make_shared<CQTEButtonSequence>(QTEJumpBoard::m_data);
         Sonic::CGameDocument::GetInstance()->AddGameObject(object);
 
@@ -868,8 +908,8 @@ HOOK(bool, __fastcall, QTEJumpBoard_CObjAdlibTrickJumpInit2, 0x1015BF0, uint32_t
 
 void QTEJumpBoard::applyPatches()
 {
-	// Make trick ramp use JumpBaord animation
-	WRITE_MEMORY(0x1014866, uint32_t, ImpulseType::JumpBoard);
+    // Make trick ramp use JumpBaord animation
+    WRITE_MEMORY(0x1014866, uint32_t, ImpulseType::JumpBoard);
 
     // Always go lower path initially
     WRITE_MEMORY(0x1014870, uint8_t, 0xE9, 0x1E, 0x01, 0x00, 0x00);
@@ -881,32 +921,32 @@ void QTEJumpBoard::applyPatches()
     WRITE_STRING(0x166A118, "");
 
     // Main triggers
-	INSTALL_HOOK(QTEJumpBoard_MsgHitEventCollision);
-	INSTALL_HOOK(QTEJumpBoard_MsgApplyImpulse);
+    INSTALL_HOOK(QTEJumpBoard_MsgHitEventCollision);
+    INSTALL_HOOK(QTEJumpBoard_MsgApplyImpulse);
 
     // Fix instance using SizeType member
     INSTALL_HOOK(QTEJumpBoard_CObjAdlibTrickJumpInit1);
     INSTALL_HOOK(QTEJumpBoard_CObjAdlibTrickJumpInit2);
 
     // Replace with Unleashed model
-    WRITE_MEMORY(0x1A47254, char*, "cmn_obj_ms_trickpanelL2_000");
-    WRITE_MEMORY(0x1A47258, char*, "cmn_obj_ms_trickpanelL4_000");
-    WRITE_MEMORY(0x1A47278, char*, "panelbelt-0000");
-    WRITE_MEMORY(0x1A4727C, char*, "panelbelt-0000");
-    WRITE_MEMORY(0x1A4726C, char*, "jumpboard_arrow-0000");
-    WRITE_MEMORY(0x1A47270, char*, "jumpboard_arrow-0000");
-    WRITE_MEMORY(0x1014EFD, uint32_t, 0xFF7448DF); // replace pt-anim with uv-anim
-    WRITE_MEMORY(0x1014F1B, uint32_t, 0xFF73E8C1); // replace pt-anim with uv-anim
+    //WRITE_MEMORY(0x1A47254, char*, "cmn_obj_ms_trickpanelL2_000");
+    //WRITE_MEMORY(0x1A47258, char*, "cmn_obj_ms_trickpanelL4_000");
+    //WRITE_MEMORY(0x1A47278, char*, "panelbelt-0000");
+    //WRITE_MEMORY(0x1A4727C, char*, "panelbelt-0000");
+    //WRITE_MEMORY(0x1A4726C, char*, "jumpboard_arrow-0000");
+    //WRITE_MEMORY(0x1A47270, char*, "jumpboard_arrow-0000");
+    //WRITE_MEMORY(0x1014EFD, uint32_t, 0xFF7448DF); // replace pt-anim with uv-anim
+    //WRITE_MEMORY(0x1014F1B, uint32_t, 0xFF73E8C1); // replace pt-anim with uv-anim
 }
 
 void QTEJumpBoard::GetQTEJumpBoardData(uint32_t ptr)
 {
-	m_data = Data();
+    m_data = Data();
 
     m_data.m_sizeType = *(uint32_t*)(ptr + 0x108);
-	m_data.m_outOfControl = *(float*)(ptr + 0x10C);
-	m_data.m_impulseSpeedOnNormal = *(float*)(ptr + 0x110);
-	m_data.m_impulseSpeedOnBoost = *(float*)(ptr + 0x114);
+    m_data.m_outOfControl = *(float*)(ptr + 0x10C);
+    m_data.m_impulseSpeedOnNormal = *(float*)(ptr + 0x110);
+    m_data.m_impulseSpeedOnBoost = *(float*)(ptr + 0x114);
 
-	m_data.m_init = true;
+    m_data.m_init = true;
 }
