@@ -8,5 +8,8 @@
   <ItemGroup>
     <ClInclude Include="Pch.h" />
     <ClInclude Include="RememberPosition.h" />
+    <ClInclude Include="StageInfo.h" />
+    <ClInclude Include="Save.h" />
+    <ClInclude Include="MsgChangeModeTo3D.h" />
   </ItemGroup>
 </Project>

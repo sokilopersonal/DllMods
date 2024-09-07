@@ -6,6 +6,7 @@
 
 #include <Windows.h>
 #include <detours.h>
+#include <tchar.h>
 
 #include <stdint.h>
 #include <array>
@@ -25,5 +26,11 @@
 
 #include <INIReader.h>
 #include <Helpers.h>
+#include <Common.h>
+
+#include <cstdint>
+#include <cstdio>
+#include <any>
+#include <regex>
 
 #define DEBUG_DRAW_TEXT_DLL_IMPORT

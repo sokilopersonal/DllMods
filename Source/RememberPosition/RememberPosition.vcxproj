@@ -148,7 +148,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>detours.lib;syelog.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>..\..\Include\BlueBlur;..\..\Include;..\..\Dependencies\Detours\lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\..\Include\BlueBlurCustom;..\..\Dependencies;..\..\Include\BlueBlur;..\..\Include\;..\..\Dependencies\Detours\include;..\..\Dependencies\Detours\lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /y /d "$(OutDir)RememberPosition.dll" "C:\Games\Sonic Generations\Mods\Remember Position\"</Command>
@@ -194,8 +194,11 @@
     <ClCompile Include="RememberPosition.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="MsgChangeModeTo3D.h" />
     <ClInclude Include="Pch.h" />
     <ClInclude Include="RememberPosition.h" />
+    <ClInclude Include="Save.h" />
+    <ClInclude Include="StageInfo.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
