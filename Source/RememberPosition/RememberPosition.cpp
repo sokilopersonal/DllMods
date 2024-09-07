@@ -34,6 +34,7 @@ HOOK(void, __fastcall, CPlayerSpeedUpdate, 0xE6BF20, Sonic::Player::CPlayerSpeed
 
     if (GetAsyncKeyState(0x4E) & 1) // N
     {
+        ctx->SetVelocity(Hedgehog::Math::CVector::Zero());
         ctx->m_pPlayer->SendMessageSelfImm<MsgChange3DMode>();
         ctx->ChangeState(savedState);
 
